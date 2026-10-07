@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>5초 밸런스 게임</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #1b1530;
+      --card: #2a2148;
+      --text: #f5f2ff;
+      --muted: #c3b9e2;
+      --lager: #ffc93c;
+      --stout: #c47a3d;
+      --warn: #ffb020;
+      --danger: #ff3b3b;
+      --glass: #ffffffd9;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #3a2a6b 0%, var(--bg) 60%);
+      color: var(--text);
+      font-family: "Jua", "Malgun Gothic", sans-serif;
+      font-weight: 400;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    button { font-family: inherit; }
+    b { font-weight: 400; color: var(--lager); }
+    .wrap { width: 100%; max-width: 760px; text-align: center; }
+    h1 { font-size: clamp(2rem, 6vw, 2.8rem); font-weight: 400; margin-bottom: 12px; }
+    .sub { color: var(--muted); font-size: 1.15rem; line-height: 1.7; margin-bottom: 24px; }
+    .rules {
+      background: var(--card);
+      border-radius: 20px;
+      padding: 20px;
+      text-align: left;
+      font-size: 1.1rem;
+      line-height: 2;
+      margin-bottom: 24px;
+    }
+    .rules li { margin-left: 20px; }
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 14px 40px;
+      font-size: 1.3rem;
+      cursor: pointer;
+      background: linear-gradient(90deg, #ffc93c, #f08a24);
+      color: #4a2a00;
+      box-shadow: 0 6px 0 #a85a10;
+      transition: transform .15s;
+    }
+    .btn:hover { transform: translateY(-2px) scale(1.04); }
+    .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #a85a10; }
+    .hidden { display: none !important; }
+
+    /* 진행 상태 */
+    .progress { color: var(--muted); font-size: 1.1rem; margin-bottom: 8px; }
+    .bar { height: 8px; background: #ffffff22; border-radius: 4px; overflow: hidden; margin-bottom: 20px; }
+    .bar > div { height: 100%; background: linear-gradient(90deg, #ffc93c, #f08a24); transition: width .3s; }
+
+    /* 시간 폭탄 */
+    /* 무대: MC 캐릭터 + 시간 폭탄 */
+    .stage {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 24px;
+      margin-bottom: 16px;
+    }
+    .bomb-area { position: relative; width: 130px; height: 150px; flex-shrink: 0; }
+
+    /* 캐릭터: 2명씩 짝지은 팀 */
+    .crew {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 40px;
+      margin-bottom: 20px;
+    }
+    .pair { display: flex; flex-direction: column; align-items: center; width: 190px; }
+    .duo { display: flex; justify-content: center; }
+    .duo .mc-char + .mc-char { margin-left: -14px; }
+    .duo .mc-char:nth-child(2) { animation-delay: -.4s !important; }
+    .pair-name { margin-top: 4px; font-size: .9rem; color: var(--muted); }
+    .pair.team-a .speech { border: 3px solid var(--lager); }
+    .pair.team-b .speech { border: 3px solid var(--stout); }
+    .speech {
+      position: relative;
+      background: #fff;
+      color: #2b1a10;
+      border-radius: 18px;
+      padding: 8px 14px;
+      font-size: 1.05rem;
+      line-height: 1.4;
+      margin-bottom: 12px;
+      max-width: 210px;
+      min-height: 38px;
+      box-shadow: 0 4px 0 #00000033;
+    }
+    .speech::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -9px;
+      transform: translateX(-50%);
+      border: 10px solid transparent;
+      border-top-color: #fff;
+      border-bottom: none;
+    }
+    .speech.pop { animation: pop .3s ease-out; }
+    @keyframes pop {
+      0% { transform: scale(.6); }
+      70% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+    .mc-char svg { width: 84px; height: auto; display: block; overflow: visible; }
+    #start .mc-char svg { width: 96px; }
+    .mc-char .m { display: none; }
+    .mc-char[data-mood="idle"] .idle,
+    .mc-char[data-mood="nervous"] .nervous,
+    .mc-char[data-mood="happy"] .happy,
+    .mc-char[data-mood="sad"] .sad,
+    .mc-char[data-mood="dizzy"] .dizzy { display: inline; }
+    .mc-char[data-mood="sad"] { animation: droop 1.6s ease-in-out infinite; }
+    @keyframes droop { 0%, 100% { transform: translateY(2px); } 50% { transform: translateY(6px) rotate(-3deg); } }
+    .mc-char .cheek { opacity: calc(.4 + var(--drunk, 0) * .6); }
+    .mc-char .drunk-face { opacity: calc(var(--drunk, 0) * .3); }
+    .mc-char[data-mood="idle"] { animation: bob 1.2s ease-in-out infinite; }
+    .mc-char[data-mood="nervous"] { animation: jitter .12s infinite; }
+    .mc-char[data-mood="happy"] { animation: hop .45s ease-out 2; }
+    .mc-char[data-mood="dizzy"] { animation: sway 1.4s ease-in-out infinite; }
+    @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+    @keyframes jitter { 0% { transform: translateX(-2px); } 50% { transform: translateX(2px); } 100% { transform: translateX(-2px); } }
+    @keyframes hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-16px); } }
+    @keyframes sway { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
+    .bomb {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      width: 110px;
+      height: 110px;
+    }
+    .bomb-body {
+      position: absolute;
+      bottom: 0;
+      left: 5px;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #666 0%, #222 45%, #000 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.8rem;
+      color: #fff;
+      box-shadow: 0 6px 18px #0008;
+    }
+    .bomb-cap {
+      position: absolute;
+      top: 2px;
+      left: 62px;
+      width: 24px;
+      height: 16px;
+      background: #555;
+      border-radius: 4px;
+      transform: rotate(35deg);
+    }
+    .fuse {
+      position: absolute;
+      top: -38px;
+      left: 76px;
+      width: 4px;
+      height: 46px;
+      background: #c9a26b;
+      transform-origin: bottom center;
+      transform: rotate(35deg);
+      border-radius: 2px;
+      transition: height 1s linear, top 1s linear;
+    }
+    .spark {
+      position: absolute;
+      top: -8px;
+      left: -8px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #fff 0%, #ffd23f 40%, #ff7b00 70%, transparent 75%);
+      animation: flicker .15s infinite alternate;
+    }
+    @keyframes flicker {
+      from { transform: scale(.8); opacity: .8; }
+      to { transform: scale(1.3); opacity: 1; }
+    }
+    .bomb.warn .bomb-body { color: var(--warn); }
+    .bomb.danger { animation: shake .12s infinite; }
+    .bomb.danger .bomb-body { color: var(--danger); }
+    @keyframes shake {
+      0% { transform: translateX(-50%) rotate(-6deg); }
+      50% { transform: translateX(-50%) rotate(6deg); }
+      100% { transform: translateX(-50%) rotate(-6deg); }
+    }
+    .boom {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      font-size: 7rem;
+      animation: boom .6s ease-out forwards;
+    }
+    .boom.cheers { font-size: 5.5rem; animation: cheers .5s ease-out; }
+    @keyframes boom {
+      0% { transform: translateX(-50%) scale(.2); opacity: 1; }
+      70% { transform: translateX(-50%) scale(1.4); opacity: 1; }
+      100% { transform: translateX(-50%) scale(1.6); opacity: 0; }
+    }
+    @keyframes cheers {
+      0% { transform: translateX(-50%) scale(.3) rotate(-20deg); }
+      60% { transform: translateX(-50%) scale(1.2) rotate(10deg); }
+      100% { transform: translateX(-50%) scale(1) rotate(0); }
+    }
+    body.flash { animation: flash .4s; }
+    @keyframes flash { 0%, 100% { background-color: var(--bg); } 30% { background-color: #ff3b3b55; } }
+
+    /* 문항 */
+    .question { font-size: 1.35rem; color: var(--muted); margin-bottom: 26px; }
+    .choices { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch; }
+    .vs { align-self: center; font-size: 2rem; color: var(--warn); }
+
+    /* 맥주잔 선택지 */
+    .choice {
+      position: relative;
+      background: none;
+      border: none;
+      padding: 14px 32px 0 0;
+      cursor: pointer;
+      display: flex;
+      color: inherit;
+      transition: transform .25s, opacity .25s;
+    }
+    .choice::after { /* 손잡이 */
+      content: "";
+      position: absolute;
+      right: 2px;
+      top: 70px;
+      width: 36px;
+      height: 96px;
+      border: 9px solid var(--glass);
+      border-left: none;
+      border-radius: 0 34px 34px 0;
+    }
+    .glass {
+      position: relative;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 230px;
+      border: 5px solid var(--glass);
+      border-top: none;
+      border-radius: 6px 6px 26px 26px;
+      box-shadow: inset 10px 0 0 #ffffff33;
+    }
+    .foam {
+      position: relative;
+      height: 30px;
+      background: #fffdf3;
+      z-index: 2;
+    }
+    .foam::before { /* 넘치는 거품 */
+      content: "";
+      position: absolute;
+      left: -10px;
+      right: -10px;
+      top: -16px;
+      height: 32px;
+      background: radial-gradient(circle at 14px 16px, #fffdf3 14px, transparent 15px) repeat-x;
+      background-size: 28px 32px;
+    }
+    .liquid {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      border-radius: 0 0 20px 20px;
+      padding: 18px 14px 22px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .choice.a .liquid { background: linear-gradient(180deg, #ffd85a, #f2a20c); color: #4a2a00; }
+    .choice.b .liquid { background: linear-gradient(180deg, #8a4516, #3d1a05); color: #fff1d6; }
+    .choice.b .foam, .choice.b .foam::before { background-color: transparent; }
+    .choice.b .foam { background: #f5e6c4; }
+    .choice.b .foam::before {
+      background: radial-gradient(circle at 14px 16px, #f5e6c4 14px, transparent 15px) repeat-x;
+      background-size: 28px 32px;
+    }
+    .beer-tag {
+      font-size: .95rem;
+      padding: 2px 12px;
+      border-radius: 999px;
+      background: #00000022;
+    }
+    .label {
+      position: relative;
+      z-index: 1;
+      font-size: clamp(1.1rem, 2.8vw, 1.35rem);
+      line-height: 1.5;
+      word-break: keep-all;
+    }
+    .key { position: relative; z-index: 1; font-size: .85rem; opacity: .65; }
+    .bubble {
+      position: absolute;
+      bottom: -10px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ffffff88;
+      animation: rise 3s infinite ease-in;
+    }
+    .bubble:nth-child(1) { left: 15%; animation-delay: 0s; }
+    .bubble:nth-child(2) { left: 35%; width: 5px; height: 5px; animation-delay: 1.1s; }
+    .bubble:nth-child(3) { left: 60%; animation-delay: .5s; }
+    .bubble:nth-child(4) { left: 80%; width: 6px; height: 6px; animation-delay: 1.8s; }
+    .bubble:nth-child(5) { left: 48%; width: 4px; height: 4px; animation-delay: 2.4s; }
+    @keyframes rise {
+      0% { transform: translateY(0); opacity: 0; }
+      15% { opacity: 1; }
+      100% { transform: translateY(-260px); opacity: 0; }
+    }
+
+    .choice:hover:not(:disabled) { animation: wobble .5s ease-in-out; }
+    @keyframes wobble {
+      0%, 100% { transform: rotate(0); }
+      30% { transform: rotate(-4deg); }
+      70% { transform: rotate(4deg); }
+    }
+    .choice:disabled { cursor: default; }
+    .choice.a.picked { transform: rotate(14deg) translateX(14px) scale(1.05); }
+    .choice.b.picked { transform: rotate(-14deg) translateX(-14px) scale(1.05); }
+    .choice.dim { opacity: .3; }
+
+    .msg { min-height: 32px; margin-top: 20px; font-size: 1.3rem; }
+    .msg.timeout { color: var(--danger); }
+
+    /* 결과 */
+    .result-list { text-align: left; background: var(--card); border-radius: 20px; padding: 8px 20px; margin-bottom: 24px; }
+    .result-item { padding: 14px 0; border-bottom: 1px solid #ffffff1a; line-height: 1.6; }
+    .result-item:last-child { border-bottom: none; }
+    .result-item .q { color: var(--muted); font-size: .95rem; }
+    .result-item .ans { font-size: 1.15rem; }
+    .result-item .ans.a { color: var(--lager); }
+    .result-item .ans.b { color: var(--stout); }
+    .result-item .ans.t { color: var(--danger); }
+    .summary { font-size: 1.15rem; margin-bottom: 18px; line-height: 1.8; color: var(--muted); }
+    .type-card {
+      background: linear-gradient(160deg, #ffd85a, #f08a24);
+      color: #4a2a00;
+      border-radius: 24px;
+      padding: 22px 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 8px 0 #a85a10;
+      animation: pop .5s ease-out;
+    }
+    .type-card .label-sm { font-size: 1rem; opacity: .75; }
+    .type-card .type-emoji { font-size: 3.5rem; line-height: 1.2; }
+    .type-card .type-name { font-size: clamp(1.7rem, 6vw, 2.3rem); margin-bottom: 8px; }
+    .type-card .type-desc { font-size: 1.1rem; line-height: 1.6; word-break: keep-all; }
+    .type-card .type-drink {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 4px 14px;
+      border-radius: 999px;
+      background: #00000018;
+      font-size: 1rem;
+    }
+
+    @media (max-width: 560px) {
+      .choices { grid-template-columns: 1fr; gap: 6px; }
+      .vs { margin: 0; }
+      .glass { min-height: 150px; }
+      .choice.a.picked, .choice.b.picked { transform: rotate(-8deg) scale(1.03); }
+      .stage { gap: 0; }
+      .crew { gap: 12px; }
+      .pair { width: 125px; }
+      .speech { font-size: .85rem; max-width: 125px; padding: 6px 10px; }
+      .mc-char svg, #start .mc-char svg { width: 58px; }
+      .duo .mc-char + .mc-char { margin-left: -10px; }
+      .pair-name { font-size: .75rem; }
+      .bomb-area { width: 100px; transform: scale(.85); transform-origin: bottom center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- 시작 화면 -->
+    <section id="start">
+      <h1>🍻 5초 밸런스 게임 💣</h1>
+      <p class="sub">고민할 시간은 없다! 폭탄이 터지기 전에 잔을 들어라!</p>
+      <div class="crew">
+        <div class="pair team-a" id="startA"></div>
+        <div class="pair team-b" id="startB"></div>
+      </div>
+      <ul class="rules">
+        <li><b>라거팀</b>(짠이·콩이)은 A를, <b>흑맥주팀</b>(덕이·뽀니)은 B를 응원해요!</li>
+        <li>총 <b>10문항</b>, 두 잔의 맥주 중 하나를 골라 마셔요.</li>
+        <li>각 문항마다 <b>제한 시간은 5초</b>! 시간 폭탄의 심지가 다 타면 펑💥</li>
+        <li>시간 안에 못 고르면 <b>벌주 한 잔</b> 🍺</li>
+        <li><b>둘 다 싫다</b>는 선택지는 없습니다. 무조건 한 잔!</li>
+        <li>키보드 <b>←/1</b> 또는 <b>→/2</b> 로도 고를 수 있어요.</li>
+      </ul>
+      <button class="btn" id="startBtn">짠! 게임 시작</button>
+    </section>
+
+    <!-- 게임 화면 -->
+    <section id="game" class="hidden">
+      <div class="progress" id="progress"></div>
+      <div class="bar"><div id="barFill"></div></div>
+
+      <div class="stage">
+        <div class="pair team-a" id="gameA"></div>
+        <div class="bomb-area" id="bombArea"></div>
+        <div class="pair team-b" id="gameB"></div>
+      </div>
+
+      <div class="question" id="question"></div>
+      <div class="choices">
+        <button class="choice a" id="choiceA">
+          <div class="glass">
+            <div class="foam"></div>
+            <div class="liquid">
+              <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              <span class="beer-tag">🍺 A 라거</span>
+              <span class="label" id="textA"></span>
+              <span class="key">← 또는 1</span>
+            </div>
+          </div>
+        </button>
+        <div class="vs">VS</div>
+        <button class="choice b" id="choiceB">
+          <div class="glass">
+            <div class="foam"></div>
+            <div class="liquid">
+              <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              <span class="beer-tag">🍺 B 흑맥주</span>
+              <span class="label" id="textB"></span>
+              <span class="key">→ 또는 2</span>
+            </div>
+          </div>
+        </button>
+      </div>
+      <div class="msg" id="msg"></div>
+    </section>
+
+    <!-- 결과 화면 -->
+    <section id="result" class="hidden">
+      <h1>🍻 게임 종료!</h1>
+      <div class="crew">
+        <div class="pair team-a" id="resultA"></div>
+        <div class="pair team-b" id="resultB"></div>
+      </div>
+      <div class="type-card" id="typeCard"></div>
+      <p class="summary" id="summary"></p>
+      <div class="result-list" id="resultList"></div>
+      <button class="btn" id="restartBtn">한 판 더!</button>
+    </section>
+  </div>
+
+  <script>
+    const QUESTIONS = [
+      { q: "짝사랑 vs 원치 않는 대시",
+        a: "내가 좋아하는 사람이 날 안 좋아하기",
+        b: "내가 안 좋아하는 사람이 계속 나에게 대시하기" },
+      { q: "연애 시작 전, 더 중요한 건?",
+        a: "외모",
+        b: "성격" },
+      { q: "연인과 보내는 시간",
+        a: "연인과 하루 종일 같이 있기",
+        b: "각자의 시간을 충분히 보내고 하루 중 일부의 시간을 같이 보내기" },
+      { q: "어떤 연인이 좋아?",
+        a: "잘 맞는 연인",
+        b: "그렇게 잘 맞지는 않지만 설레는 연인" },
+      { q: "시간을 돌릴 수 있다면 (후회되는 연애가 있다면)",
+        a: "고백하기",
+        b: "안 고백하기" },
+      { q: "시간을 돌릴 수 있다면",
+        a: "공부에만 전념하기",
+        b: "친구들과 시간을 많이 보내며 여러 활동을 하며 학교 다니기" },
+      { q: "직장에 있어서",
+        a: "대기업에 입사하기",
+        b: "잘나가는 스타트업 대표 되기" },
+      { q: "외출했는데...",
+        a: "지갑을 집에 두고 오기 (모든 결제 수단이 다 지갑에)",
+        b: "스마트폰을 집에 두고 오기 (약속 위치를 기억 못하는데 친구 번호도 기억이 안 남)" },
+      { q: "학교에서",
+        a: "교수님과 더 친하기",
+        b: "동기들과 더 친하기" },
+      { q: "평생 이렇게 살기",
+        a: "연봉 공개하고 살기",
+        b: "나이 공개 안 하고 살기" },
+    ];
+
+    /* ===== 결과 유형 ===== */
+    const TYPES = {
+      romantic: {
+        emoji: "💘", name: "직진 로맨티스트",
+        desc: "계산보다 마음이 먼저! 설렘 한 잔이면 밤새 달릴 수 있는 낭만파예요.",
+        drink: "분위기 타면 원샷하는 스타일",
+      },
+      realist: {
+        emoji: "🧊", name: "쿨한 현실주의자",
+        desc: "감정에 휘둘리지 않는 실속파. 술자리에서도 막차 시간은 꼭 챙겨요.",
+        drink: "자기 주량을 정확히 아는 스타일",
+      },
+      insider: {
+        emoji: "🎉", name: "핵인싸 분위기메이커",
+        desc: "사람이 곧 재산! 어딜 가도 친구가 생기고 술자리 텐션을 책임져요.",
+        drink: "건배사 담당, 2차 3차 주최자",
+      },
+      planner: {
+        emoji: "📚", name: "갓생 모범생",
+        desc: "계획대로 착착, 미래를 차곡차곡 쌓는 타입. 다음 날 1교시도 출석해요.",
+        drink: "딱 한 잔만 하고 귀가하는 스타일",
+      },
+      drunk: {
+        emoji: "🥴", name: "벌주 수집가",
+        desc: "고민하다 폭탄만 여러 번 터뜨렸어요. 신중한 건지… 그냥 취하고 싶었던 건지?",
+        drink: "오늘 집에 혼자 못 가는 스타일",
+      },
+    };
+    // 문항별 [A를 고르면, B를 고르면] 점수가 올라가는 유형
+    const TYPE_MAP = [
+      ["romantic", "realist"],
+      ["romantic", "realist"],
+      ["romantic", "realist"],
+      ["realist", "romantic"],
+      ["romantic", "realist"],
+      ["planner", "insider"],
+      ["planner", "insider"],
+      ["insider", "realist"],
+      ["planner", "insider"],
+      ["insider", "planner"],
+    ];
+
+    function getResultType() {
+      const timeouts = answers.filter((a) => a.side === "t").length;
+      if (timeouts >= 5) return TYPES.drunk;
+      const score = { romantic: 0, realist: 0, insider: 0, planner: 0 };
+      answers.forEach((ans, i) => {
+        if (ans.side === "a") score[TYPE_MAP[i][0]]++;
+        if (ans.side === "b") score[TYPE_MAP[i][1]]++;
+      });
+      const best = Object.keys(score).reduce((x, y) => (score[y] > score[x] ? y : x));
+      return TYPES[best];
+    }
+
+    const TIME_LIMIT = 5;
+    const FUSE_MAX = 46;
+
+    const $ = (id) => document.getElementById(id);
+    const screens = { start: $("start"), game: $("game"), result: $("result") };
+
+    let index = 0;
+    let answers = [];
+    let remaining = TIME_LIMIT;
+    let tickId = null;
+    let locked = false;
+
+    /* ===== 캐릭터: 과잠 입은 대학생 4명 (2명씩 한 팀) ===== */
+    const TEAMS = {
+      a: {
+        name: "라거팀",
+        mug: { beer: "#ffc93c", foam: "#fffdf3" },
+        members: [
+          { name: "짠이", jacket: "#2f3fbf", hair: "#3a2a1a", style: "short" },
+          { name: "콩이", jacket: "#e85d9a", hair: "#5a3218", style: "long" },
+        ],
+      },
+      b: {
+        name: "흑맥주팀",
+        mug: { beer: "#5a2a0c", foam: "#f5e6c4" },
+        members: [
+          { name: "덕이", jacket: "#2e8b57", hair: "#1a1a1a", style: "short", glasses: true },
+          { name: "뽀니", jacket: "#f08a24", hair: "#b5651d", style: "bun" },
+        ],
+      },
+    };
+
+    function charSVG(c, team, letter) {
+      const ink = "#2b1a10";
+      const backHair = c.style === "long"
+        ? `<path d="M16 58 Q16 10 60 10 Q104 10 104 58 L104 100 Q60 108 16 100 Z" fill="${c.hair}"/>` : "";
+      const bun = c.style === "bun" ? `<circle cx="60" cy="12" r="13" fill="${c.hair}"/>` : "";
+      const bangs = c.style === "long"
+        ? `<path d="M20 54 Q22 14 60 14 Q98 14 100 54 Q84 34 60 32 Q36 34 20 54 Z" fill="${c.hair}"/>`
+        : `<path d="M20 52 Q22 14 60 14 Q98 14 100 52 Q90 32 72 30 Q66 40 52 36 Q38 34 28 46 Z" fill="${c.hair}"/>`;
+      const glasses = c.glasses
+        ? `<g fill="none" stroke="${ink}" stroke-width="2.5"><circle cx="45" cy="57" r="11"/><circle cx="75" cy="57" r="11"/><path d="M56 57 h8"/></g>` : "";
+      return `
+      <svg viewBox="0 0 130 140" xmlns="http://www.w3.org/2000/svg">
+        ${backHair}
+        <!-- 과잠 -->
+        <rect x="22" y="96" width="76" height="46" rx="24" fill="${c.jacket}"/>
+        <rect x="22" y="106" width="14" height="34" rx="7" fill="#f4f1ea"/>
+        <rect x="84" y="106" width="14" height="34" rx="7" fill="#f4f1ea"/>
+        <path d="M50 96 L60 108 L70 96" fill="none" stroke="#f4f1ea" stroke-width="4"/>
+        <text x="60" y="133" text-anchor="middle" font-size="18" fill="#fff" font-family="Jua, sans-serif">${letter}</text>
+        <!-- 손에 든 맥주 -->
+        <rect x="92" y="94" width="22" height="28" rx="4" fill="${team.mug.beer}" stroke="#fff" stroke-width="2"/>
+        <rect x="90" y="89" width="26" height="9" rx="4.5" fill="${team.mug.foam}"/>
+        <path d="M114 100 h5 a6 6 0 0 1 0 14 h-5" fill="none" stroke="#fff" stroke-width="3"/>
+        <!-- 얼굴 -->
+        ${bun}
+        <circle cx="60" cy="56" r="40" fill="#ffe0c2"/>
+        <circle class="drunk-face" cx="60" cy="56" r="40" fill="#ff5a5a"/>
+        ${bangs}
+        <ellipse class="cheek" cx="36" cy="70" rx="8" ry="5" fill="#ff7b9c"/>
+        <ellipse class="cheek" cx="84" cy="70" rx="8" ry="5" fill="#ff7b9c"/>
+        <!-- 기본 -->
+        <g class="m idle">
+          <circle cx="45" cy="57" r="5" fill="${ink}"/><circle cx="75" cy="57" r="5" fill="${ink}"/>
+          <circle cx="47" cy="55" r="1.6" fill="#fff"/><circle cx="77" cy="55" r="1.6" fill="#fff"/>
+          <path d="M50 74 Q60 82 70 74" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>
+        </g>
+        <!-- 긴장 -->
+        <g class="m nervous">
+          <circle cx="45" cy="57" r="7" fill="#fff" stroke="${ink}" stroke-width="2"/><circle cx="45" cy="57" r="2.5" fill="${ink}"/>
+          <circle cx="75" cy="57" r="7" fill="#fff" stroke="${ink}" stroke-width="2"/><circle cx="75" cy="57" r="2.5" fill="${ink}"/>
+          <path d="M46 78 q4 -4 7 0 q4 4 7 0 q4 -4 7 0 q4 4 7 0" fill="none" stroke="${ink}" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M96 34 q6 9 0 14 q-6 -5 0 -14z" fill="#7fd3ff"/>
+        </g>
+        <!-- 신남 -->
+        <g class="m happy">
+          <path d="M38 59 Q45 49 52 59" fill="none" stroke="${ink}" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M68 59 Q75 49 82 59" fill="none" stroke="${ink}" stroke-width="3.5" stroke-linecap="round"/>
+          <path d="M47 71 Q60 92 73 71 Z" fill="#8a2a2a"/>
+          <path d="M53 80 Q60 86 67 80" fill="#ff8a8a"/>
+        </g>
+        <!-- 시무룩 -->
+        <g class="m sad">
+          <circle cx="45" cy="59" r="4.5" fill="${ink}"/><circle cx="75" cy="59" r="4.5" fill="${ink}"/>
+          <path d="M37 51 L51 46 M69 46 L83 51" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>
+          <path d="M50 81 Q60 72 70 81" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>
+          <path d="M40 66 q3 6 0 9 q-3 -3 0 -9z" fill="#7fd3ff"/>
+        </g>
+        <!-- 취함 -->
+        <g class="m dizzy">
+          <path d="M45 57 m-6 0 a6 6 0 1 0 6 -6 a4 4 0 1 0 4 4" fill="none" stroke="${ink}" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M75 57 m-6 0 a6 6 0 1 0 6 -6 a4 4 0 1 0 4 4" fill="none" stroke="${ink}" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M49 79 q5 -6 11 0 q5 6 11 0" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>
+          <text x="98" y="30" font-size="13" fill="#fff" font-family="Jua, sans-serif">hic!</text>
+        </g>
+        ${glasses}
+      </svg>`;
+    }
+
+    const LINES = {
+      startA: ["라거팀 왔다~ 🍺", "오늘 다 마셔~!", "A가 진리지!"],
+      startB: ["흑맥주팀 등장! 🖤", "B 아니면 벌주~", "우리 팀으로 와!"],
+      idleA: ["A 가자!! 🍺", "라거가 진리지~", "A 골라 A!", "고민은 벌주만 늦출 뿐!"],
+      idleB: ["B지 B!! 🖤", "흑맥주 가즈아~", "B 아니면 벌주!", "솔직하게 가자~"],
+      nervous: ["빨리빨리!! 😱", "터진다!!", "3! 2! 1!..."],
+      win: ["나이스~!! 🍻", "역시 우리 편!", "캬~ 짠!", "인정! 원샷~"],
+      lose: ["아 왜~ 😭", "배신이야…", "흥 칫 뿡!", "그걸 고른다고?!"],
+      boomA: ["마셔라~ 마셔라~ 🎶", "벌주다 벌주~!"],
+      boomB: ["누가 술을 마셔~ 🎶", "원샷! 원샷! 🥴"],
+    };
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+    function renderPair(id, key) {
+      const team = TEAMS[key];
+      const letter = key.toUpperCase();
+      const chars = team.members
+        .map((c) => `<div class="mc-char" data-mood="idle">${charSVG(c, team, letter)}</div>`)
+        .join("");
+      $(id).innerHTML = `
+        <div class="speech"></div>
+        <div class="duo">${chars}</div>
+        <div class="pair-name">${team.name} · ${team.members.map((c) => c.name).join(" & ")}</div>`;
+    }
+
+    function setPair(id, mood, text) {
+      const box = $(id);
+      box.querySelectorAll(".mc-char").forEach((char) => {
+        char.dataset.mood = mood;
+        char.style.animation = "none";
+        void char.offsetWidth;
+        char.style.animation = "";
+      });
+      const speech = box.querySelector(".speech");
+      speech.textContent = text;
+      speech.classList.remove("pop");
+      void speech.offsetWidth;
+      speech.classList.add("pop");
+    }
+
+    function setDrunk(timeouts) {
+      document.body.style.setProperty("--drunk", Math.min(timeouts / 5, 1));
+    }
+
+    function show(name) {
+      Object.values(screens).forEach((s) => s.classList.add("hidden"));
+      screens[name].classList.remove("hidden");
+    }
+
+    function resetBomb() {
+      $("bombArea").innerHTML = `
+        <div class="bomb" id="bomb">
+          <div class="fuse" id="fuse"><div class="spark"></div></div>
+          <div class="bomb-cap"></div>
+          <div class="bomb-body" id="timer">${TIME_LIMIT}</div>
+        </div>`;
+    }
+
+    function updateBomb() {
+      const bomb = $("bomb");
+      const fuse = $("fuse");
+      $("timer").textContent = remaining;
+      const len = (remaining / TIME_LIMIT) * FUSE_MAX;
+      fuse.style.height = len + "px";
+      fuse.style.top = -(len - 8) + "px";
+      bomb.classList.toggle("warn", remaining <= 3 && remaining > 1);
+      bomb.classList.toggle("danger", remaining <= 1);
+    }
+
+    function explode() {
+      $("bombArea").innerHTML = '<div class="boom">💥</div>';
+      document.body.classList.remove("flash");
+      void document.body.offsetWidth;
+      document.body.classList.add("flash");
+    }
+
+    function loadQuestion() {
+      const item = QUESTIONS[index];
+      locked = false;
+      remaining = TIME_LIMIT;
+
+      $("progress").textContent = `${index + 1}번째 잔 / ${QUESTIONS.length}`;
+      $("barFill").style.width = (index / QUESTIONS.length) * 100 + "%";
+      $("question").textContent = item.q;
+      $("textA").textContent = item.a;
+      $("textB").textContent = item.b;
+      ["choiceA", "choiceB"].forEach((id) => {
+        const el = $(id);
+        el.disabled = false;
+        el.classList.remove("picked", "dim");
+      });
+      $("msg").textContent = "";
+      $("msg").className = "msg";
+
+      resetBomb();
+      updateBomb();
+      setPair("gameA", "idle", pick(LINES.idleA));
+      setPair("gameB", "idle", pick(LINES.idleB));
+
+      clearInterval(tickId);
+      tickId = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+          clearInterval(tickId);
+          timeout();
+        } else {
+          updateBomb();
+          if (remaining === 2) {
+            setPair("gameA", "nervous", pick(LINES.nervous));
+            setPair("gameB", "nervous", pick(LINES.nervous));
+          }
+        }
+      }, 1000);
+    }
+
+    function lockChoices() {
+      locked = true;
+      clearInterval(tickId);
+      $("choiceA").disabled = true;
+      $("choiceB").disabled = true;
+    }
+
+    function choose(side) {
+      if (locked) return;
+      lockChoices();
+      const item = QUESTIONS[index];
+      answers.push({ side, text: side === "a" ? item.a : item.b });
+
+      const picked = side === "a" ? $("choiceA") : $("choiceB");
+      const other = side === "a" ? $("choiceB") : $("choiceA");
+      picked.classList.add("picked");
+      other.classList.add("dim");
+      $("msg").textContent = `🍻 짠! ${TIME_LIMIT - remaining}초 만에 원샷!`;
+      $("bombArea").innerHTML = '<div class="boom cheers">🍻</div>';
+      const winner = side === "a" ? "gameA" : "gameB";
+      const loser = side === "a" ? "gameB" : "gameA";
+      setPair(winner, "happy", pick(LINES.win));
+      setPair(loser, "sad", pick(LINES.lose));
+
+      setTimeout(next, 1000);
+    }
+
+    function timeout() {
+      if (locked) return;
+      lockChoices();
+      answers.push({ side: "t", text: "시간 초과 💥 벌주 한 잔!" });
+      $("choiceA").classList.add("dim");
+      $("choiceB").classList.add("dim");
+      $("msg").textContent = "💥 펑! 시간 초과! 벌주 원샷 🍺";
+      $("msg").className = "msg timeout";
+      explode();
+      setDrunk(answers.filter((a) => a.side === "t").length);
+      setPair("gameA", "dizzy", pick(LINES.boomA));
+      setPair("gameB", "dizzy", pick(LINES.boomB));
+
+      setTimeout(next, 1600);
+    }
+
+    function next() {
+      index++;
+      if (index < QUESTIONS.length) {
+        loadQuestion();
+      } else {
+        showResult();
+      }
+    }
+
+    function showResult() {
+      $("barFill").style.width = "100%";
+      const timeouts = answers.filter((a) => a.side === "t").length;
+      const answered = answers.length - timeouts;
+      let comment;
+      if (timeouts === 0) comment = "벌주 0잔! 결단력 만렙, 오늘의 술자리 MVP 🏆";
+      else if (timeouts <= 3) comment = "살짝 알딸딸~ 그래도 꽤 과감했어요 😎";
+      else comment = "벌주를 너무 많이 마셨어요... 결정장애 의심 🥴";
+
+      const type = getResultType();
+      $("typeCard").innerHTML = `
+        <div class="label-sm">당신의 술자리 유형은</div>
+        <div class="type-emoji">${type.emoji}</div>
+        <div class="type-name">${type.name}</div>
+        <div class="type-desc">${type.desc}</div>
+        <div class="type-drink">🍺 ${type.drink}</div>`;
+
+      const votesA = answers.filter((a) => a.side === "a").length;
+      const votesB = answers.filter((a) => a.side === "b").length;
+
+      $("summary").innerHTML =
+        `10잔 중 <b>${answered}잔</b> 선택, 벌주 <b>${timeouts}잔</b> 🍺<br>` +
+        `라거팀 <b>${votesA}표</b> vs 흑맥주팀 <b>${votesB}표</b><br>${comment}`;
+
+      $("resultList").innerHTML = answers
+        .map((ans, i) => `
+          <div class="result-item">
+            <div class="q">${i + 1}번째 잔. ${QUESTIONS[i].a} vs ${QUESTIONS[i].b}</div>
+            <div class="ans ${ans.side}">🍺 ${ans.text}</div>
+          </div>`)
+        .join("");
+
+      if (timeouts >= 4) {
+        setPair("resultA", "dizzy", "우리… 집에 어떻게 가지…? 🥴");
+        setPair("resultB", "dizzy", "hic! 2차는… 무리… 🫠");
+      } else if (votesA === votesB) {
+        setPair("resultA", "happy", "무승부! 다 같이 짠~ 🍻");
+        setPair("resultB", "happy", "사이좋게 2차 가자~!");
+      } else {
+        const aWins = votesA > votesB;
+        setPair(aWins ? "resultA" : "resultB", "happy", "우리 팀 승리!! 🏆 2차 가자~");
+        setPair(aWins ? "resultB" : "resultA", "sad", "다음엔 우리가 이긴다… 😭");
+      }
+
+      show("result");
+    }
+
+    function startGame() {
+      index = 0;
+      answers = [];
+      setDrunk(0);
+      show("game");
+      loadQuestion();
+    }
+
+    ["start", "game", "result"].forEach((s) => {
+      renderPair(s + "A", "a");
+      renderPair(s + "B", "b");
+    });
+    setPair("startA", "happy", pick(LINES.startA));
+    setPair("startB", "happy", pick(LINES.startB));
+
+    $("startBtn").addEventListener("click", startGame);
+    $("restartBtn").addEventListener("click", startGame);
+    $("choiceA").addEventListener("click", () => choose("a"));
+    $("choiceB").addEventListener("click", () => choose("b"));
+
+    document.addEventListener("keydown", (e) => {
+      if (screens.game.classList.contains("hidden")) return;
+      if (e.key === "ArrowLeft" || e.key === "1") choose("a");
+      if (e.key === "ArrowRight" || e.key === "2") choose("b");
+    });
+  </script>
+</body>
+</html>
